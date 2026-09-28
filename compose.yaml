@@ -1,0 +1,88 @@
+name: auth-oidc-stack
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      AUTH_DEMO_USERNAME: ${AUTH_DEMO_USERNAME:-}
+      AUTH_DEMO_PASSWORD: ${AUTH_DEMO_PASSWORD:-}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/postgres/00-create-keycloak.sql:/docker-entrypoint-initdb.d/00-create-keycloak.sql:ro
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/10-auth-schema.sql:ro
+      - ./deploy/postgres/20-seed-auth-user.sh:/docker-entrypoint-initdb.d/20-seed-auth-user.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    networks:
+      auth-network:
+    ports:
+      - "5433:5432"
+
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:latest}
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD:?set KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD in .env}
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET in .env}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?set KEYCLOAK_CLIENT_SECRET in .env}
+    volumes:
+      - ./deploy/keycloak/auth-demo-realm.json:/opt/keycloak/data/import/auth-demo-realm.json:ro
+    ports:
+      - "8080:8080"
+      - "3000:3000"
+      - "4888:4888"
+      - "5888:5888"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      auth-network:
+
+  oidc-provider:
+    image: ${OIDC_PROVIDER_IMAGE:-oidc-provider:v1}
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/postgres?sslmode=disable
+      OIDC_ISSUER: http://localhost:4888
+      OIDC_CLIENT_ID: keycloak-broker
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET in .env}
+      OIDC_REDIRECT_URIS: http://localhost:8080/realms/auth-demo/broker/go-auth/endpoint
+      OIDC_PRIVATE_KEY_FILE: /run/secrets/oidc-private-key.pem
+      KEYCLOAK_ISSUER: http://localhost:8080/realms/auth-demo
+      KEYCLOAK_CLIENT_ID: protected-app
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:?set KEYCLOAK_CLIENT_SECRET in .env}
+      KEYCLOAK_REDIRECT_URL: http://localhost:3000/callback
+      KEYCLOAK_IDP_HINT: go-auth
+      PROTECTED_API_AUDIENCE: protected-api
+      PROTECTED_API_LISTEN_ADDR: :3000
+    volumes:
+      - ${OIDC_PRIVATE_KEY_FILE_HOST:?set OIDC_PRIVATE_KEY_FILE_HOST in .env}:/run/secrets/oidc-private-key.pem:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+    network_mode: "service:keycloak"
+
+volumes:
+  postgres-data:
+
+networks:
+  auth-network:
+    driver: bridge

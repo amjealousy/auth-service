@@ -1,0 +1,11 @@
+
+
+
+
+GRPC localhost:5888/grpc.AuthService/Login
+content-type: application/grpc
+
+{
+"fqdn": "amjealousy@admin.go-signal.com",
+"password": "ks06032001"
+}

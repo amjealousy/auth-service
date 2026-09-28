@@ -1,0 +1,95 @@
+{
+  "realm": "auth-demo",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "authenticationFlows": [
+    {
+      "alias": "auto create broker user",
+      "description": "Create a new brokered user without an interactive profile review",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "idp-create-user-if-unique",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "protected-api",
+      "name": "Protected API audience",
+      "enabled": true,
+      "bearerOnly": true,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "protected-app",
+      "name": "Protected application",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${KEYCLOAK_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "protocol": "openid-connect",
+      "protocolMappers": [
+        {
+          "name": "protected-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "protected-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "go-auth",
+      "displayName": "Go Auth Service",
+      "providerId": "oidc",
+      "enabled": true,
+      "updateProfileFirstLoginMode": "off",
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "auto create broker user",
+      "config": {
+        "authorizationUrl": "http://localhost:4888/authorize",
+        "tokenUrl": "http://localhost:4888/token",
+        "userInfoUrl": "http://localhost:4888/userinfo",
+        "jwksUrl": "http://localhost:4888/jwks",
+        "issuer": "http://localhost:4888",
+        "clientId": "keycloak-broker",
+        "clientSecret": "${OIDC_CLIENT_SECRET}",
+        "clientAuthMethod": "client_secret_basic",
+        "defaultScope": "openid profile email",
+        "useJwksUrl": "true",
+        "validateSignature": "true",
+        "disableNonce": "false",
+        "syncMode": "IMPORT"
+      }
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+.env
+.env.example
+.secrets/
+AGENTS.md
+CONTEXT.md
+.agent/
+graphify-out/
+docs/
+
+

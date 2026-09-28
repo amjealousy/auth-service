@@ -1,0 +1,9 @@
+.env
+.secrets/
+.git/
+.idea/
+.vscode/
+graphify-out/
+*.pem
+*.key
+auth-service
